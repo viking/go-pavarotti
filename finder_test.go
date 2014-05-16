@@ -1,9 +1,9 @@
 package pavarotti
 
 import (
-	"github.com/mikkyang/id3-go"
-	"github.com/mikkyang/id3-go/v1"
-	"github.com/mikkyang/id3-go/v2"
+	"github.com/viking/id3-go"
+	"github.com/viking/id3-go/v1"
+	"github.com/viking/id3-go/v2"
 	"io/ioutil"
 	"os"
 	"path/filepath"
@@ -18,49 +18,61 @@ type songInfo struct {
 	year        string
 	track       string
 	genre       string
-	comment     string
+	comments    []string
 	copyright   string
 	composer    string
 }
 
 var findTests = []struct {
-	path       string
-	tagVersion uint8
-	tagData    songInfo
-	expected   songInfo
+	path     string
+	tagMajor uint8
+	tagMinor uint8
+	tagData  songInfo
+	expected songInfo
 }{
 	{
 		// file with no tags but with good path
 		path:     filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
-		expected: songInfo{"Foo", "", "Bar", "Baz", "", "01", "", "", "", ""},
+		expected: songInfo{"Foo", "", "Bar", "Baz", "", "01", "", nil, "", ""},
 	},
 	{
 		// file with v1 tags and good dirname
-		path:       filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
-		tagVersion: 1,
-		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux"},
-		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		path:     filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
+		tagMajor: 1,
+		tagData:  songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux"},
+		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
 		// file with v2 tags and bad path
-		path:       filepath.Join("Foo", "Bar", "05 - Baz.mp3"),
-		tagVersion: 2,
-		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
-		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		path:     filepath.Join("Foo", "Bar", "05 - Baz.mp3"),
+		tagMajor: 2,
+		tagMinor: 3,
+		tagData:  songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
 		// file with v2 tags and missing album dir
-		path:       filepath.Join("Foo", "05 - Baz.mp3"),
-		tagVersion: 2,
-		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
-		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		path:     filepath.Join("Foo", "05 - Baz.mp3"),
+		tagMajor: 2,
+		tagMinor: 3,
+		tagData:  songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
 		// file with v2 tags and no dir
-		path:       filepath.Join("05 - Baz.mp3"),
-		tagVersion: 2,
-		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
-		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		path:     filepath.Join("05 - Baz.mp3"),
+		tagMajor: 2,
+		tagMinor: 3,
+		tagData:  songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+	},
+	{
+		// file with full v2 tags
+		path:     filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
+		tagMajor: 2,
+		tagMinor: 3,
+		tagData:  songInfo{"Foo", "Foo", "Bar", "Baz qux", "2014", "01", "Country", []string{"Blah"}, "2014 Foo Bar", "Corge"},
+		expected: songInfo{"Foo", "Foo", "Bar", "Baz qux", "2014", "01", "Country", []string{"eng\tComment:\nBlah"}, "2014 Foo Bar", "Corge"},
 	},
 }
 
@@ -95,15 +107,45 @@ func TestFind(t *testing.T) {
 			t.Errorf("test %d: %s", testNum, err)
 			continue
 		}
-		if tt.tagVersion > 0 {
+		if tt.tagMajor > 0 {
 			var tagger id3.Tagger
 
-			if tt.tagVersion == 1 {
+			if tt.tagMajor == 1 {
 				tagger = new(v1.Tag)
-			} else if tt.tagVersion == 2 {
+			} else if tt.tagMajor == 2 {
 				tagger = v2.NewTag(3)
-				ft := v2.V23FrameTypeMap["TRCK"]
-				textFrame := v2.NewTextFrame(ft, tt.tagData.track)
+
+				var (
+					ft         v2.FrameType
+					textFrame  *v2.TextFrame
+					utextFrame *v2.UnsynchTextFrame
+				)
+
+				// add track
+				ft = v2.V23FrameTypeMap["TRCK"]
+				textFrame = v2.NewTextFrame(ft, tt.tagData.track)
+				tagger.AddFrames(textFrame)
+
+				// add album artist
+				ft = v2.V23FrameTypeMap["TPE2"]
+				textFrame = v2.NewTextFrame(ft, tt.tagData.albumArtist)
+				tagger.AddFrames(textFrame)
+
+				// add comments
+				for _, comment := range tt.tagData.comments {
+					ft = v2.V23FrameTypeMap["COMM"]
+					utextFrame = v2.NewUnsynchTextFrame(ft, "Comment", comment)
+					tagger.AddFrames(utextFrame)
+				}
+
+				// add copyright
+				ft = v2.V23FrameTypeMap["TCOP"]
+				textFrame = v2.NewTextFrame(ft, tt.tagData.copyright)
+				tagger.AddFrames(textFrame)
+
+				// add composer
+				ft = v2.V23FrameTypeMap["TCOM"]
+				textFrame = v2.NewTextFrame(ft, tt.tagData.composer)
 				tagger.AddFrames(textFrame)
 			}
 
@@ -150,8 +192,14 @@ func TestFind(t *testing.T) {
 				if song.Genre != tt.expected.genre {
 					t.Errorf("test %d: expected genre to be <%q>, got <%q>", testNum, tt.expected.genre, song.Genre)
 				}
-				if song.Comment != tt.expected.comment {
-					t.Errorf("test %d: expected comment to be <%q>, got <%q>", testNum, tt.expected.comment, song.Comment)
+				if len(tt.expected.comments) != len(song.Comments) {
+					t.Errorf("test %d: expected comments to be of length %d, got %d", testNum, len(tt.expected.comments), len(song.Comments))
+				} else {
+					for i, comment := range tt.expected.comments {
+						if comment != song.Comments[i] {
+							t.Errorf("test %d: expected comment to be <%q>, got <%q>", testNum, comment, song.Comments[i])
+						}
+					}
 				}
 				if song.Composer != tt.expected.composer {
 					t.Errorf("test %d: expected composer to be <%q>, got <%q>", testNum, tt.expected.composer, song.Composer)

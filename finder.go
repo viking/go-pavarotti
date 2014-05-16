@@ -1,7 +1,7 @@
 package pavarotti
 
 import (
-	"github.com/mikkyang/id3-go"
+	"github.com/viking/id3-go"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -17,7 +17,7 @@ type Song struct {
 	Year        string
 	Track       string
 	Genre       string
-	Comment     string
+	Comments    []string
 	Composer    string
 	Copyright   string
 }
@@ -71,6 +71,7 @@ func (song *Song) UpdateFromMetadata() {
 	}
 	defer f.Close()
 
+	// metadata that conditionally overwrites existing data
 	artist := song.sanitize(f.Artist())
 	if artist != "" {
 		song.Artist = artist
@@ -92,6 +93,37 @@ func (song *Song) UpdateFromMetadata() {
 		if track != "" {
 			song.Track = track
 		}
+	}
+
+	// metadata that always overwrites existing data
+	song.Genre = song.sanitize(f.Genre())
+	song.Year = song.sanitize(f.Year())
+
+	var sanitizedComments []string
+	comments := f.Comments()
+	for _, comment := range comments {
+		sanitizedComment := song.sanitize(comment)
+		if sanitizedComment != "" {
+			sanitizedComments = append(sanitizedComments, comment)
+		}
+	}
+	if len(sanitizedComments) > 0 {
+		song.Comments = sanitizedComments
+	}
+
+	albumArtistFrame := f.Frame("TPE2")
+	if albumArtistFrame != nil {
+		song.AlbumArtist = song.sanitize(albumArtistFrame.String())
+	}
+
+	copyrightFrame := f.Frame("TCOP")
+	if copyrightFrame != nil {
+		song.Copyright = song.sanitize(copyrightFrame.String())
+	}
+
+	composerFrame := f.Frame("TCOM")
+	if composerFrame != nil {
+		song.Composer = song.sanitize(composerFrame.String())
 	}
 }
 
