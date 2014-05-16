@@ -2,11 +2,26 @@ package pavarotti
 
 import (
 	"github.com/viking/id3-go"
+	"github.com/viking/id3-go/v2"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
 )
+
+const (
+	tagVersion1 = iota
+	tagVersion22
+	tagVersion23
+	tagVersionUnknown
+)
+
+var tagNameMap = map[string][]string{
+	"Track":       {"", "TRK", "TRCK", ""},
+	"AlbumArtist": {"", "TP2", "TPE2", ""},
+	"Copyright":   {"", "TCR", "TCOP", ""},
+	"Composer":    {"", "TCM", "TCOM", ""},
+}
 
 type Song struct {
 	Path        string
@@ -65,13 +80,27 @@ func (song *Song) ParseBasename(basename string) {
 
 // Parse ID3 tags and update information
 func (song *Song) UpdateFromMetadata() {
+	var tagName string
+
 	f, err := id3.Open(song.Path)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 
-	// metadata that conditionally overwrites existing data
+	versionString := f.Version()
+	var version uint8
+	if versionString[:1] == "1" {
+		version = tagVersion1
+	} else if versionString[:3] == "2.2" {
+		version = tagVersion22
+	} else if versionString[:3] == "2.3" {
+		version = tagVersion23
+	} else {
+		version = tagVersionUnknown
+	}
+
+	/// metadata that conditionally overwrites existing data
 	artist := song.sanitize(f.Artist())
 	if artist != "" {
 		song.Artist = artist
@@ -87,7 +116,12 @@ func (song *Song) UpdateFromMetadata() {
 		song.Title = title
 	}
 
-	trackFrame := f.Frame("TRCK")
+	// track number
+	var trackFrame v2.Framer
+	tagName = tagNameMap["Track"][version]
+	if tagName != "" {
+		trackFrame = f.Frame(tagName)
+	}
 	if trackFrame != nil {
 		track := song.sanitize(trackFrame.String())
 		if track != "" {
@@ -95,10 +129,11 @@ func (song *Song) UpdateFromMetadata() {
 		}
 	}
 
-	// metadata that always overwrites existing data
+	/// metadata that always overwrites existing data
 	song.Genre = song.sanitize(f.Genre())
 	song.Year = song.sanitize(f.Year())
 
+	// comments
 	var sanitizedComments []string
 	comments := f.Comments()
 	for _, comment := range comments {
@@ -111,19 +146,43 @@ func (song *Song) UpdateFromMetadata() {
 		song.Comments = sanitizedComments
 	}
 
-	albumArtistFrame := f.Frame("TPE2")
+	// album artist
+	var albumArtistFrame v2.Framer
+	tagName = tagNameMap["AlbumArtist"][version]
+	if tagName != "" {
+		albumArtistFrame = f.Frame(tagName)
+	}
 	if albumArtistFrame != nil {
-		song.AlbumArtist = song.sanitize(albumArtistFrame.String())
+		albumArtist := song.sanitize(albumArtistFrame.String())
+		if albumArtist != "" {
+			song.AlbumArtist = albumArtist
+		}
 	}
 
-	copyrightFrame := f.Frame("TCOP")
+	// copyright
+	var copyrightFrame v2.Framer
+	tagName = tagNameMap["Copyright"][version]
+	if tagName != "" {
+		copyrightFrame = f.Frame(tagName)
+	}
 	if copyrightFrame != nil {
-		song.Copyright = song.sanitize(copyrightFrame.String())
+		copyright := song.sanitize(copyrightFrame.String())
+		if copyright != "" {
+			song.Copyright = copyright
+		}
 	}
 
-	composerFrame := f.Frame("TCOM")
+	// composer
+	var composerFrame v2.Framer
+	tagName = tagNameMap["Composer"][version]
+	if tagName != "" {
+		composerFrame = f.Frame(tagName)
+	}
 	if composerFrame != nil {
-		song.Composer = song.sanitize(composerFrame.String())
+		composer := song.sanitize(composerFrame.String())
+		if composer != "" {
+			song.Composer = composer
+		}
 	}
 }
 

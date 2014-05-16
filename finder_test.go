@@ -43,7 +43,7 @@ var findTests = []struct {
 		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
-		// file with v2 tags and bad path
+		// file with v2.3 tags and bad path
 		path:     filepath.Join("Foo", "Bar", "05 - Baz.mp3"),
 		tagMajor: 2,
 		tagMinor: 3,
@@ -51,7 +51,7 @@ var findTests = []struct {
 		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
-		// file with v2 tags and missing album dir
+		// file with v2.3 tags and missing album dir
 		path:     filepath.Join("Foo", "05 - Baz.mp3"),
 		tagMajor: 2,
 		tagMinor: 3,
@@ -59,7 +59,7 @@ var findTests = []struct {
 		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
-		// file with v2 tags and no dir
+		// file with v2.3 tags and no dir
 		path:     filepath.Join("05 - Baz.mp3"),
 		tagMajor: 2,
 		tagMinor: 3,
@@ -67,10 +67,18 @@ var findTests = []struct {
 		expected: songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
-		// file with full v2 tags
+		// file with full v2.3 tags
 		path:     filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
 		tagMajor: 2,
 		tagMinor: 3,
+		tagData:  songInfo{"Foo", "Foo", "Bar", "Baz qux", "2014", "01", "Country", []string{"Blah"}, "2014 Foo Bar", "Corge"},
+		expected: songInfo{"Foo", "Foo", "Bar", "Baz qux", "2014", "01", "Country", []string{"eng\tComment:\nBlah"}, "2014 Foo Bar", "Corge"},
+	},
+	{
+		// file with full v2.2 tags
+		path:     filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
+		tagMajor: 2,
+		tagMinor: 2,
 		tagData:  songInfo{"Foo", "Foo", "Bar", "Baz qux", "2014", "01", "Country", []string{"Blah"}, "2014 Foo Bar", "Corge"},
 		expected: songInfo{"Foo", "Foo", "Bar", "Baz qux", "2014", "01", "Country", []string{"eng\tComment:\nBlah"}, "2014 Foo Bar", "Corge"},
 	},
@@ -113,7 +121,7 @@ func TestFind(t *testing.T) {
 			if tt.tagMajor == 1 {
 				tagger = new(v1.Tag)
 			} else if tt.tagMajor == 2 {
-				tagger = v2.NewTag(3)
+				tagger = v2.NewTag(tt.tagMinor)
 
 				var (
 					ft         v2.FrameType
@@ -122,29 +130,49 @@ func TestFind(t *testing.T) {
 				)
 
 				// add track
-				ft = v2.V23FrameTypeMap["TRCK"]
+				if tt.tagMinor == 2 {
+					ft = v2.V22FrameTypeMap["TRK"]
+				} else if tt.tagMinor == 3 {
+					ft = v2.V23FrameTypeMap["TRCK"]
+				}
 				textFrame = v2.NewTextFrame(ft, tt.tagData.track)
 				tagger.AddFrames(textFrame)
 
 				// add album artist
-				ft = v2.V23FrameTypeMap["TPE2"]
+				if tt.tagMinor == 2 {
+					ft = v2.V22FrameTypeMap["TP2"]
+				} else if tt.tagMinor == 3 {
+					ft = v2.V23FrameTypeMap["TPE2"]
+				}
 				textFrame = v2.NewTextFrame(ft, tt.tagData.albumArtist)
 				tagger.AddFrames(textFrame)
 
 				// add comments
 				for _, comment := range tt.tagData.comments {
-					ft = v2.V23FrameTypeMap["COMM"]
+					if tt.tagMinor == 2 {
+						ft = v2.V22FrameTypeMap["COM"]
+					} else if tt.tagMinor == 3 {
+						ft = v2.V23FrameTypeMap["COMM"]
+					}
 					utextFrame = v2.NewUnsynchTextFrame(ft, "Comment", comment)
 					tagger.AddFrames(utextFrame)
 				}
 
 				// add copyright
-				ft = v2.V23FrameTypeMap["TCOP"]
+				if tt.tagMinor == 2 {
+					ft = v2.V22FrameTypeMap["TCR"]
+				} else if tt.tagMinor == 3 {
+					ft = v2.V23FrameTypeMap["TCOP"]
+				}
 				textFrame = v2.NewTextFrame(ft, tt.tagData.copyright)
 				tagger.AddFrames(textFrame)
 
 				// add composer
-				ft = v2.V23FrameTypeMap["TCOM"]
+				if tt.tagMinor == 2 {
+					ft = v2.V22FrameTypeMap["TCM"]
+				} else if tt.tagMinor == 3 {
+					ft = v2.V23FrameTypeMap["TCOM"]
+				}
 				textFrame = v2.NewTextFrame(ft, tt.tagData.composer)
 				tagger.AddFrames(textFrame)
 			}
