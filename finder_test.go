@@ -30,17 +30,34 @@ var findTests = []struct {
 	expected   songInfo
 }{
 	{
+		// file with no tags but with good path
 		path:     filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
 		expected: songInfo{"Foo", "", "Bar", "Baz", "", "01", "", "", "", ""},
 	},
 	{
+		// file with v1 tags and good dirname
 		path:       filepath.Join("Foo", "Bar", "01 - Baz.mp3"),
 		tagVersion: 1,
 		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux"},
 		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 	},
 	{
+		// file with v2 tags and bad path
 		path:       filepath.Join("Foo", "Bar", "05 - Baz.mp3"),
+		tagVersion: 2,
+		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+	},
+	{
+		// file with v2 tags and missing album dir
+		path:       filepath.Join("Foo", "05 - Baz.mp3"),
+		tagVersion: 2,
+		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
+	},
+	{
+		// file with v2 tags and no dir
+		path:       filepath.Join("05 - Baz.mp3"),
 		tagVersion: 2,
 		tagData:    songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
 		expected:   songInfo{artist: "Foo dude", album: "Bar fight", title: "Baz qux", track: "01"},
