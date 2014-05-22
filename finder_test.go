@@ -221,11 +221,12 @@ func TestFind(t *testing.T) {
 					t.Errorf("test %d: expected genre to be <%q>, got <%q>", testNum, tt.expected.genre, song.Genre)
 				}
 				if len(tt.expected.comments) != len(song.Comments) {
-					t.Errorf("test %d: expected comments to be of length %d, got %d", testNum, len(tt.expected.comments), len(song.Comments))
+					t.Errorf("test %d: expected comments to be %q, got %q", testNum, tt.expected.comments, song.Comments)
 				} else {
 					for i, comment := range tt.expected.comments {
 						if comment != song.Comments[i] {
-							t.Errorf("test %d: expected comment to be <%q>, got <%q>", testNum, comment, song.Comments[i])
+							t.Errorf("test %d: expected comments to be %q, got %q", testNum, tt.expected.comments, song.Comments)
+							break
 						}
 					}
 				}

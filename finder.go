@@ -59,15 +59,6 @@ func NewSongFromPath(root, relPath string) (song Song) {
 	return
 }
 
-func (Song) sanitize(s string) string {
-	// strip null bytes
-	i := strings.Index(s, "\x00")
-	if i >= 0 {
-		return s[:i]
-	}
-	return s
-}
-
 // Deduce song information from filename
 func (song *Song) ParseBasename(basename string) {
 	re := regexp.MustCompile("^(\\d+)\\s*-\\s*(.+)\\.[a-zA-Z0-9_]{3}$")
@@ -101,17 +92,17 @@ func (song *Song) UpdateFromMetadata() {
 	}
 
 	/// metadata that conditionally overwrites existing data
-	artist := song.sanitize(f.Artist())
+	artist := f.Artist()
 	if artist != "" {
 		song.Artist = artist
 	}
 
-	album := song.sanitize(f.Album())
+	album := f.Album()
 	if album != "" {
 		song.Album = album
 	}
 
-	title := song.sanitize(f.Title())
+	title := f.Title()
 	if title != "" {
 		song.Title = title
 	}
@@ -123,27 +114,22 @@ func (song *Song) UpdateFromMetadata() {
 		trackFrame = f.Frame(tagName)
 	}
 	if trackFrame != nil {
-		track := song.sanitize(trackFrame.String())
+		track := trackFrame.String()
 		if track != "" {
 			song.Track = track
 		}
 	}
 
 	/// metadata that always overwrites existing data
-	song.Genre = song.sanitize(f.Genre())
-	song.Year = song.sanitize(f.Year())
+	song.Genre = f.Genre()
+	song.Year = f.Year()
 
 	// comments
-	var sanitizedComments []string
 	comments := f.Comments()
 	for _, comment := range comments {
-		sanitizedComment := song.sanitize(comment)
-		if sanitizedComment != "" {
-			sanitizedComments = append(sanitizedComments, comment)
+		if comment != "" {
+			song.Comments = append(song.Comments, comment)
 		}
-	}
-	if len(sanitizedComments) > 0 {
-		song.Comments = sanitizedComments
 	}
 
 	// album artist
@@ -153,7 +139,7 @@ func (song *Song) UpdateFromMetadata() {
 		albumArtistFrame = f.Frame(tagName)
 	}
 	if albumArtistFrame != nil {
-		albumArtist := song.sanitize(albumArtistFrame.String())
+		albumArtist := albumArtistFrame.String()
 		if albumArtist != "" {
 			song.AlbumArtist = albumArtist
 		}
@@ -166,7 +152,7 @@ func (song *Song) UpdateFromMetadata() {
 		copyrightFrame = f.Frame(tagName)
 	}
 	if copyrightFrame != nil {
-		copyright := song.sanitize(copyrightFrame.String())
+		copyright := copyrightFrame.String()
 		if copyright != "" {
 			song.Copyright = copyright
 		}
@@ -179,7 +165,7 @@ func (song *Song) UpdateFromMetadata() {
 		composerFrame = f.Frame(tagName)
 	}
 	if composerFrame != nil {
-		composer := song.sanitize(composerFrame.String())
+		composer := composerFrame.String()
 		if composer != "" {
 			song.Composer = composer
 		}
