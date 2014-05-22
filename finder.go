@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -29,8 +30,8 @@ type Song struct {
 	AlbumArtist string
 	Album       string
 	Title       string
-	Year        string
-	Track       string
+	Year        int
+	Track       uint
 	Genre       string
 	Comments    []string
 	Composer    string
@@ -65,7 +66,8 @@ func (song *Song) ParseBasename(basename string) {
 	matches := re.FindStringSubmatch(basename)
 	if len(matches) == 3 {
 		song.Title = matches[2]
-		song.Track = matches[1]
+		track, _ := strconv.ParseUint(matches[1], 10, 0)
+		song.Track = uint(track)
 	}
 }
 
@@ -116,13 +118,17 @@ func (song *Song) UpdateFromMetadata() {
 	if trackFrame != nil {
 		track := trackFrame.String()
 		if track != "" {
-			song.Track = track
+			var trackNum uint64
+			trackNum, err = strconv.ParseUint(track, 10, 0)
+			if err != nil {
+				song.Track = uint(trackNum)
+			}
 		}
 	}
 
 	/// metadata that always overwrites existing data
 	song.Genre = f.Genre()
-	song.Year = f.Year()
+	song.Year, _ = strconv.Atoi(f.Year())
 
 	// comments
 	comments := f.Comments()
