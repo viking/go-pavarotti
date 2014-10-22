@@ -25,6 +25,8 @@ func TestLibrary_AddSong(t *testing.T) {
 		path, title, artist, album string
 		track                      uint
 		numRows                    uint
+		library                    *Library
+		song                       Song
 	)
 	for testNum, tt := range addSongTests {
 		f, err = ioutil.TempFile("", "pavarotti")
@@ -35,10 +37,14 @@ func TestLibrary_AddSong(t *testing.T) {
 		f.Close()
 		defer os.Remove(f.Name())
 
-		library := Library{DatabasePath: f.Name()}
-		song := Song{Path: tt.path, Title: tt.title, Artist: tt.artist, Album: tt.album, Track: tt.track}
-
-		err = library.AddSong(song)
+		library, err = NewLibrary(f.Name())
+		if err != nil {
+			t.Errorf("test %d: %q", err)
+			continue
+		}
+		song = Song{Path: tt.path, Title: tt.title, Artist: tt.artist, Album: tt.album, Track: tt.track}
+		library.AddSong(song)
+		err = library.Close()
 		if err != tt.err {
 			t.Errorf("test %d: expected %q error, got %q", testNum, tt.err, err)
 			continue
