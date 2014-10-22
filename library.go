@@ -26,8 +26,11 @@ func (library *Library) AddSong(song Song) {
 
 func (library *Library) Flush() (err error) {
 	var (
-		tx   *sql.Tx
-		stmt *sql.Stmt
+		tx     *sql.Tx
+		stmt1  *sql.Stmt
+		stmt2  *sql.Stmt
+		res    sql.Result
+		lastId int64
 	)
 
 	tx, err = library.db.Begin()
@@ -35,17 +38,39 @@ func (library *Library) Flush() (err error) {
 		return
 	}
 
-	stmt, err = tx.Prepare("INSERT INTO songs (path, title, artist, album, track) VALUES (?, ?, ?, ?, ?)")
+	stmt1, err = tx.Prepare("INSERT INTO songs (path, title, artist, albumartist, album, track, year, genre, composer, copyright) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		tx.Rollback()
+		return
+	}
+
+	stmt2, err = tx.Prepare("INSERT INTO comments (data, song_id) VALUES (?, ?)")
 	if err != nil {
 		tx.Rollback()
 		return
 	}
 
 	for _, song := range library.queue {
-		_, err = stmt.Exec(song.Path, song.Title, song.Artist, song.Album, song.Track)
+		res, err = stmt1.Exec(song.Path, song.Title, song.Artist, song.AlbumArtist, song.Album, song.Track, song.Year, song.Genre, song.Composer, song.Copyright)
 		if err != nil {
 			tx.Rollback()
 			return
+		}
+
+		if len(song.Comments) > 0 {
+			lastId, err = res.LastInsertId()
+			if err != nil {
+				tx.Rollback()
+				return
+			}
+
+			for _, comment := range song.Comments {
+				_, err = stmt2.Exec(comment, lastId)
+				if err != nil {
+					tx.Rollback()
+					return
+				}
+			}
 		}
 	}
 
@@ -86,7 +111,13 @@ func (library *Library) openDatabase() (err error) {
 	for version < DatabaseVersion {
 		switch version {
 		case 0:
-			_, err = library.db.Exec("CREATE TABLE songs (path TEXT, title TEXT, artist TEXT, album TEXT, track INTEGER)")
+			_, err = library.db.Exec("CREATE TABLE songs (id INTEGER PRIMARY KEY, path TEXT, title TEXT, artist TEXT, albumartist TEXT, album TEXT, track INTEGER, year INTEGER, genre TEXT, composer TEXT, copyright TEXT)")
+			if err != nil {
+				library.db.Close()
+				return
+			}
+
+			_, err = library.db.Exec("CREATE TABLE comments (id INTEGER PRIMARY KEY, data TEXT, song_id INTEGER)")
 			if err != nil {
 				library.db.Close()
 				return
